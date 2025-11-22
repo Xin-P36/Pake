@@ -50,8 +50,8 @@ program
   .option('--hide-title-bar', 'For Mac, hide title bar', DEFAULT.hideTitleBar)
   .option('--multi-arch', 'For Mac, both Intel and M1', DEFAULT.multiArch)
   .option(
-    '--inject <./style.css,./script.js,...>',
-    'Injection of .js or .css files',
+    '--inject <files>',
+    'Inject local CSS/JS files into the page',
     (val, previous) => {
       if (!val) return DEFAULT.inject;
 
@@ -81,9 +81,10 @@ program
       .hideHelp(),
   )
   .addOption(
-    new Option('--targets <string>', 'For Linux, option "deb" or "appimage"')
-      .default(DEFAULT.targets)
-      .hideHelp(),
+    new Option(
+      '--targets <string>',
+      'Build target format for your system',
+    ).default(DEFAULT.targets),
   )
   .addOption(
     new Option(
@@ -96,6 +97,11 @@ program
   .addOption(
     new Option('--always-on-top', 'Always on the top level')
       .default(DEFAULT.alwaysOnTop)
+      .hideHelp(),
+  )
+  .addOption(
+    new Option('--maximize', 'Start window maximized')
+      .default(DEFAULT.maximize)
       .hideHelp(),
   )
   .addOption(
@@ -124,8 +130,17 @@ program
       .hideHelp(),
   )
   .addOption(
-    new Option('--hide-on-close', 'Hide window on close instead of exiting')
+    new Option(
+      '--hide-on-close [boolean]',
+      'Hide window on close instead of exiting (default: true for macOS, false for others)',
+    )
       .default(DEFAULT.hideOnClose)
+      .argParser((value) => {
+        if (value === undefined) return true; // --hide-on-close without value
+        if (value === 'true') return true;
+        if (value === 'false') return false;
+        throw new Error('--hide-on-close must be true or false');
+      })
       .hideHelp(),
   )
   .addOption(new Option('--title <string>', 'Window title').hideHelp())
@@ -135,27 +150,69 @@ program
       .hideHelp(),
   )
   .addOption(
+    new Option('--wasm', 'Enable WebAssembly support (Flutter Web, etc.)')
+      .default(DEFAULT.wasm)
+      .hideHelp(),
+  )
+  .addOption(
+    new Option('--enable-drag-drop', 'Enable drag and drop functionality')
+      .default(DEFAULT.enableDragDrop)
+      .hideHelp(),
+  )
+  .addOption(
+    new Option('--keep-binary', 'Keep raw binary file alongside installer')
+      .default(DEFAULT.keepBinary)
+      .hideHelp(),
+  )
+  .addOption(
+    new Option('--multi-instance', 'Allow multiple app instances')
+      .default(DEFAULT.multiInstance)
+      .hideHelp(),
+  )
+  .addOption(
+    new Option('--start-to-tray', 'Start app minimized to tray')
+      .default(DEFAULT.startToTray)
+      .hideHelp(),
+  )
+  .addOption(
+    new Option(
+      '--force-internal-navigation',
+      'Keep every link inside the Pake window instead of opening external handlers',
+    )
+      .default(DEFAULT.forceInternalNavigation)
+      .hideHelp(),
+  )
+  .addOption(
     new Option('--installer-language <string>', 'Installer language')
       .default(DEFAULT.installerLanguage)
       .hideHelp(),
   )
-  .version(packageJson.version, '-v, --version', 'Output the current version')
+  .version(packageJson.version, '-v, --version')
+  .configureHelp({
+    sortSubcommands: true,
+    optionTerm: (option) => {
+      if (option.flags === '-v, --version' || option.flags === '-h, --help')
+        return '';
+      return option.flags;
+    },
+    optionDescription: (option) => {
+      if (option.flags === '-v, --version' || option.flags === '-h, --help')
+        return '';
+      return option.description;
+    },
+  })
   .action(async (url: string, options: PakeCliOptions) => {
     await checkUpdateTips();
 
     if (!url) {
-      program.outputHelp((str) => {
-        return str
-          .split('\n')
-          .filter(
-            (line) => !/((-h,|--help)|((-v|-V),|--version))\s+.+$/.test(line),
-          )
-          .join('\n');
+      program.help({
+        error: false,
       });
-      process.exit(0);
+      return;
     }
 
     log.setDefaultLevel('info');
+    log.setLevel('info');
     if (options.debug) {
       log.setLevel('debug');
     }
